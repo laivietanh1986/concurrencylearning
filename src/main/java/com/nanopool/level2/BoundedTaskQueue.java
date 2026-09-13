@@ -120,6 +120,39 @@ public class BoundedTaskQueue<T> implements TaskQueue<T> {
         return capacity;
     }
 
+    // Bai 11: dung de "vet" mot task ra khoi hang doi khi no thua race voi shutdown()
+    // (task da duoc enqueue nhung pool chuyen khoi RUNNING truoc khi co worker nao kip lay ra).
+    public boolean remove(T item) {
+        lock.lock();
+        try {
+            Object[] remaining = new Object[count];
+            int idx = head;
+            int n = 0;
+            boolean found = false;
+            for (int i = 0; i < count; i++) {
+                Object elem = buffer[idx];
+                if (!found && elem == item) {
+                    found = true;
+                } else {
+                    remaining[n++] = elem;
+                }
+                idx = (idx + 1) % capacity;
+            }
+            if (found) {
+                for (int i = 0; i < capacity; i++) {
+                    buffer[i] = (i < n) ? remaining[i] : null;
+                }
+                head = 0;
+                count = n;
+                tail = n % capacity;
+                notFull.signal();
+            }
+            return found;
+        } finally {
+            lock.unlock();
+        }
+    }
+
     long getWakeups() {
         return wakeups.get();
     }
